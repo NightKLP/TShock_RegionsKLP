@@ -982,6 +982,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_Chest.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_Chest.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -997,6 +999,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_Mannequin.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_Mannequin.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1012,6 +1016,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_Sign.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_Sign.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1027,6 +1033,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_ItemFrame.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_ItemFrame.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1042,6 +1050,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_ItemRack.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_ItemRack.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1057,6 +1067,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_ItemJar.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_ItemJar.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1072,6 +1084,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_FoodPlatter.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_FoodPlatter.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1087,6 +1101,8 @@ namespace RegionsKLP
 
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (RegionAllow_TileEntityMisc.Contains(get.Name)) { continue; }
                             if (RegionAllowStartsWith_TileEntityMisc.Any(r => get.Name.StartsWith(r))) { continue; }
 
@@ -1102,6 +1118,8 @@ namespace RegionsKLP
                     {
                         foreach (Region get in getregions)
                         {
+                            if (!IsUniqueRegion(get.Name)) { continue; }
+
                             if (!get.AllowedIDs.Contains(player.Account.ID) && !get.AllowedGroups.Contains(player.Group.Name))
                             {
                                 return false;
