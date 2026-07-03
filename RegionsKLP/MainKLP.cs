@@ -32,7 +32,7 @@ namespace RegionsKLP
 
         public override string Name => "RegionskLP";
 
-        public override Version Version => new System.Version(1, 0);
+        public override Version Version => new System.Version(1, 0, 1);
         #endregion
 
 
