@@ -32,7 +32,7 @@ namespace RegionsKLP
 
         public override string Name => "RegionskLP";
 
-        public override Version Version => new System.Version(1, 0, 1);
+        public override Version Version => new System.Version(1, 0, 2);
         #endregion
 
 
@@ -254,6 +254,8 @@ namespace RegionsKLP
         {
             SyncRegionAllowStrData(Config);
 
+            ServerApi.Hooks.NetGetData.Register(this, OnGetData);
+
             //check
             TShockAPI.Hooks.PlayerHooks.PlayerPostLogin += OnPlayerPostLogin;
             ServerApi.Hooks.ServerLeave.Register(this, OnServerLeave);
@@ -314,6 +316,8 @@ namespace RegionsKLP
         {
             if (disposing)
             {
+                ServerApi.Hooks.NetGetData.Deregister(this, OnGetData);
+
                 //check
                 TShockAPI.Hooks.PlayerHooks.PlayerPostLogin -= OnPlayerPostLogin;
 
@@ -386,7 +390,7 @@ namespace RegionsKLP
 
         #region Check
 
-        private static async void OnPlayerPostLogin(PlayerPostLoginEventArgs args)
+        private static void OnPlayerPostLogin(PlayerPostLoginEventArgs args)
         {
             if (!PlayerHousingKLP.ItExist(args.Player.Account.ID))
             {
@@ -413,7 +417,7 @@ namespace RegionsKLP
         #endregion
 
         #region {[ OnGetData ]}
-        private async void OnGetData(GetDataEventArgs args)
+        private void OnGetData(GetDataEventArgs args)
         {
             if (args.Handled)
                 return;
@@ -488,8 +492,16 @@ namespace RegionsKLP
             TileID.HallowedPlants2,
             TileID.JunglePlants,
             TileID.JunglePlants2,
+            TileID.LifeFruit,
             TileID.MushroomPlants,
             TileID.OasisPlants,
+            TileID.PlantDetritus,
+            TileID.Pumpkins,
+
+            //herbs
+            TileID.ImmatureHerbs,
+            TileID.MatureHerbs,
+            TileID.BloomingHerbs,
 
             //vines
             TileID.VineFlowers,
@@ -502,24 +514,32 @@ namespace RegionsKLP
             TileID.MushroomVines,
 
             //stone
+            TileID.LongMoss,
             TileID.ArgonMoss,
             TileID.BlueMoss,
             TileID.BrownMoss,
             TileID.GreenMoss,
             TileID.KryptonMoss,
             TileID.LavaMoss,
-            TileID.LongMoss,
             TileID.PurpleMoss,
             TileID.RainbowMoss,
             TileID.RedMoss,
             TileID.VioletMoss,
             TileID.XenonMoss,
 
+            //dye
+            TileID.DyePlants,
+
             //pots
             TileID.Pots,
 
 
             //misc
+            TileID.PlanteraThorns,
+            TileID.Seaweed,
+            TileID.LilyPad,
+            TileID.Cattail,
+            TileID.SeaOats,
             TileID.Cobweb,
             TileID.Pigronata,
 
@@ -540,7 +560,10 @@ namespace RegionsKLP
                 return;
             }
 
-            if (!breakableTiles.Contains(Main.tile[tileX, tileY].type) && args.Action != GetDataHandlers.EditAction.KillTile)
+            bool ignore = args.Action == GetDataHandlers.EditAction.KillTile &&
+                breakableTiles.Contains(Main.tile[tileX, tileY].type);
+
+            if (!ignore)
             {
                 DPoint point1 = new(tileX, tileY);
                 if (HouseDefineCommand_OnGoing(args.Player, point1, DPoint.Empty))
@@ -752,7 +775,13 @@ namespace RegionsKLP
             #region code
             int ID = args.ID;
             int Slot = args.Slot;
-            if (!CanModify(args.Player, Main.chest[ID].x, Main.chest[ID].y, TileModifyType.Container))
+            Chest chest = Main.chest[ID];
+            if (chest == null)
+            {
+                args.Handled = true;
+                return;
+            }
+            if (!CanModify(args.Player, chest.x, chest.y, TileModifyType.Container))
             {
                 args.Player.SendData(PacketTypes.ChestItem, "", ID, Slot);
                 args.Handled = true;
@@ -1149,7 +1178,7 @@ namespace RegionsKLP
             },
               null, Seconds * 1000, Timeout.Infinite
             );
-            OnCreateHouse[Executer.Index] = (new Define(), timer);
+            OnCreateHouse[Executer.Index] = new(new Define(), timer);
         }
         public static void RemoveOnCreateHouse(TSPlayer Executer, bool sendMessage = false)
         {
@@ -1181,8 +1210,7 @@ namespace RegionsKLP
 
         public bool HouseDefineCommand_OnGoing(TSPlayer Executer, DPoint point1, DPoint point2, bool removepoint = false)
         {
-            if (OnCreateHouse.Length <= 0) return false;
-            if (OnCreateHouse[Executer.Index] == null) return false;
+            if (OnCreateHouse[Executer.Index] == null) { return false; }
 
             (Define define, System.Threading.Timer timer) gdata = OnCreateHouse[Executer.Index].Value;
 
@@ -1310,7 +1338,7 @@ namespace RegionsKLP
 
             int countPoint()
             {
-                return 1 + (gdata.define.point1 != DPoint.Empty ? 1 : 0) + (gdata.define.point1 != DPoint.Empty ? 1 : 0);
+                return 1 + (gdata.define.point1 != DPoint.Empty ? 1 : 0) + (gdata.define.point2 != DPoint.Empty ? 1 : 0);
             }
 
             // 1 = first mark | 2 = 2nd mark | 3 = final mark
@@ -1353,15 +1381,14 @@ namespace RegionsKLP
         #endregion
 
 
-
         public static bool IsUniqueRegion(string regionName)
         {
+            if (regionName.StartsWith(Config.Main.Housing.Indicator)) { return false; }
+
             if (Config.Main.uniqueRegionsName.Any(r => r.NameText == regionName)) { return true; }
 
-            foreach (var get in Config.Main.uniqueRegionsName_StartsWith)
-            {
-                if (get.NameText == regionName) { return true; }
-            }
+            if (Config.Main.uniqueRegionsName_StartsWith.Any(r => regionName.StartsWith(r.NameText))) { return true; }
+
             return false;
         }
 
