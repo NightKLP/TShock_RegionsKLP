@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Timers;
 using Terraria;
 using Terraria.DataStructures;
+using Terraria.GameContent.Drawing;
 using Terraria.GameContent.Tile_Entities;
 using Terraria.ID;
 using Terraria.Localization;
@@ -32,7 +33,7 @@ namespace RegionsKLP
 
         public override string Name => "RegionskLP";
 
-        public override Version Version => new System.Version(1, 0, 2);
+        public override Version Version => new System.Version(1, 1);
         #endregion
 
 
@@ -257,6 +258,7 @@ namespace RegionsKLP
             ServerApi.Hooks.NetGetData.Register(this, OnGetData);
 
             //check
+            GetDataHandlers.PlayerUpdate += OnPlayerUpdate;
             TShockAPI.Hooks.PlayerHooks.PlayerPostLogin += OnPlayerPostLogin;
             ServerApi.Hooks.ServerLeave.Register(this, OnServerLeave);
 
@@ -319,6 +321,7 @@ namespace RegionsKLP
                 ServerApi.Hooks.NetGetData.Deregister(this, OnGetData);
 
                 //check
+                GetDataHandlers.PlayerUpdate -= OnPlayerUpdate;
                 TShockAPI.Hooks.PlayerHooks.PlayerPostLogin -= OnPlayerPostLogin;
 
                 //breakchange
@@ -390,6 +393,210 @@ namespace RegionsKLP
 
         #region Check
 
+        private static Vector2[] lasplayerpos_update = new Vector2[Main.player.Length];
+
+        private static int[][] lasplayerinregions_update = Enumerable.Range(0, Main.player.Length).Select(_ => Array.Empty<int>()).ToArray();
+        private static async void OnPlayerUpdate(object? sender, GetDataHandlers.PlayerUpdateEventArgs args)
+        {
+            if (args.Player.State != 10) { return; }
+            if (args.Player.TPlayer.Center == lasplayerpos_update[args.PlayerId]) { return; }
+            lasplayerpos_update[args.PlayerId] = args.Player.TPlayer.Center;
+
+            Vector2 tilepos = new Vector2((int)args.Player.TPlayer.Center.X / 16, (int)args.Player.TPlayer.Center.Y / 16);
+
+            var regions = TShock.Regions.InAreaRegionID((int)tilepos.X, (int)tilepos.Y).ToArray();
+
+            var enteredregion = regions.Where(e => !lasplayerinregions_update[args.PlayerId].Contains(e)).ToArray();
+            var leftregion = lasplayerinregions_update[args.PlayerId].Where(e => !regions.Contains(e)).ToArray();
+
+            if (enteredregion.Length != 0)
+            {
+                foreach (int regid in enteredregion)
+                {
+                    Region get = TShock.Regions.GetRegionByID(regid);
+
+                    if (get == null) { continue; }
+
+                    if (!args.Player.HasPermission(Permissions.editregion) &&
+                        !args.Player.HasPermission(Permissions.manageregion) &&
+                        !args.Player.HasPermission(Config.Permissions.HouseKLP_Admin) &&
+                        !args.Player.HasPermission(Config.Permissions.HouseKLP_ByPassBlackList))
+                    {
+                        if (MainDBManager.TryGetRegionKLPByID(regid, out RegionKLP regionklp))
+                        {
+                            if (regionklp.IsBlackListed(args.Player))
+                            {
+                                args.Player.Teleport(lasplayerpos_update[args.PlayerId]);
+
+                                args.Player.SendData(PacketTypes.CreateCombatTextExtended,
+                                    $"Entered a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}" +
+                                    $" [ Access Denied! ]"
+                                    , (int)Color.OrangeRed.packedValue, args.Player.X, args.Player.Y + 50);
+                                continue;
+                            }
+                        }
+                    }
+                    await PlayAni(SpreadFromBorder(get.Area, tilepos));
+
+
+                    args.Player.SendData(PacketTypes.CreateCombatTextExtended,
+                        $"Entered a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}" +
+                        (get.HasPermissionToBuildInRegion(args.Player) ? " [ Access Granted! ]" : "")
+                        , (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y + 30);
+                }
+            }
+
+            if (leftregion.Length != 0)
+            {
+                foreach (int regid in leftregion)
+                {
+                    Region get = TShock.Regions.GetRegionByID(regid);
+
+                    if (get == null) { continue; }
+
+                    await PlayAni(SpreadFromBorder(get.Area, tilepos));
+
+                    string msg = $"You left a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}";
+
+
+                    args.Player.SendData(PacketTypes.CreateCombatTextExtended,
+                        msg, (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y);
+                }
+            }
+
+            lasplayerinregions_update[args.PlayerId] = regions;
+
+            return;
+
+            async Task PlayAni(List<Vector2> pointsets)
+            {
+                foreach (Vector2 p in pointsets)
+                {
+                    ParticleOrchestraSettings settings = new()
+                    {
+                        IndexOfPlayerWhoInvokedThis = args.PlayerId,
+                        MovementVector = new(0, 0),
+                        PositionInWorld = (p * 16) + new Vector2(8, 8),
+                        UniqueInfoPiece = -1
+                    };
+
+                    ParticleOrchestrator.BroadcastParticleSpawn(ParticleOrchestraType.ChlorophyteLeafCrystalPassive, settings);
+
+                    await Task.Delay(20);
+                }
+            }
+
+            List<Vector2> SpreadFromBorder(Rectangle rect, Vector2 position)
+            {
+                int steps = 2;
+                float spacing = 1;
+                List<Vector2> points = new();
+
+                Vector2 origin = GetBorderPosition(rect, position);
+
+                float perimeter =
+                    2f * (rect.Width + rect.Height);
+
+                float startDistance =
+                    origin.Y == rect.Top
+                        ? origin.X - rect.Left
+                        : origin.X == rect.Right
+                            ? rect.Width + origin.Y - rect.Top
+                            : origin.Y == rect.Bottom
+                                ? rect.Width + rect.Height + rect.Right - origin.X
+                                : 2f * rect.Width + rect.Height + rect.Bottom - origin.Y;
+
+                // Middle point first
+                points.Add(GetPointAtDistance(startDistance, rect));
+
+                for (int i = 1; i <= steps; i++)
+                {
+                    // Left
+                    points.Add(GetPointAtDistance(
+                        startDistance - i * spacing,
+                        rect
+                    ));
+
+                    // Right
+                    points.Add(GetPointAtDistance(
+                        startDistance + i * spacing,
+                        rect
+                    ));
+                }
+
+                return points;
+            }
+
+            Vector2 GetPointAtDistance(float distance, Rectangle rect)
+            {
+                float perimeter = 2f * (rect.Width + rect.Height);
+
+                distance = ((distance % perimeter) + perimeter) % perimeter;
+
+                if (distance <= rect.Width)
+                    return new Vector2(rect.Left + distance, rect.Top);
+
+                distance -= rect.Width;
+
+                if (distance <= rect.Height)
+                    return new Vector2(rect.Right, rect.Top + distance);
+
+                distance -= rect.Height;
+
+                if (distance <= rect.Width)
+                    return new Vector2(rect.Right - distance, rect.Bottom);
+
+                distance -= rect.Width;
+
+                return new Vector2(rect.Left, rect.Bottom - distance);
+            }
+
+            Vector2 GetBorderPosition(Rectangle rect, Vector2 position)
+            {
+                byte border = GetNearestBorder(rect, position);
+
+                return border switch
+                {
+                    0 => new Vector2(
+                        MathHelper.Clamp(position.X, rect.Left, rect.Right),
+                        rect.Top
+                    ),
+
+                    1 => new Vector2(
+                        MathHelper.Clamp(position.X, rect.Left, rect.Right),
+                        rect.Bottom
+                    ),
+
+                    2 => new Vector2(
+                        rect.Left,
+                        MathHelper.Clamp(position.Y, rect.Top, rect.Bottom)
+                    ),
+
+                    3 => new Vector2(
+                        rect.Right,
+                        MathHelper.Clamp(position.Y, rect.Top, rect.Bottom)
+                    ),
+
+                    _ => position
+                };
+            }
+
+            byte GetNearestBorder(Rectangle rect, Vector2 position)
+            {
+                float top = Math.Abs(position.Y - rect.Top);
+                float bottom = Math.Abs(rect.Bottom - position.Y);
+                float left = Math.Abs(position.X - rect.Left);
+                float right = Math.Abs(rect.Right - position.X);
+
+                float min = Math.Min(Math.Min(top, bottom), Math.Min(left, right));
+
+                if (min == top) return 0;
+                if (min == bottom) return 1;
+                if (min == left) return 2;
+
+                return 3;
+            }
+        }
         private static void OnPlayerPostLogin(PlayerPostLoginEventArgs args)
         {
             if (!PlayerHousingKLP.ItExist(args.Player.Account.ID))
@@ -919,6 +1126,68 @@ namespace RegionsKLP
 
         static int[] NPC_ID_BLKLST =
         {
+            //ooa
+            NPCID.DD2EterniaCrystal,
+            NPCID.DD2LanePortal,
+            NPCID.DD2Betsy,
+            NPCID.DD2GoblinT1,
+            NPCID.DD2GoblinT2,
+            NPCID.DD2GoblinT3,
+            NPCID.DD2GoblinBomberT1,
+            NPCID.DD2GoblinBomberT2,
+            NPCID.DD2GoblinBomberT3,
+            NPCID.DD2WyvernT1,
+            NPCID.DD2WyvernT2,
+            NPCID.DD2WyvernT3,
+            NPCID.DD2JavelinstT1,
+            NPCID.DD2JavelinstT2,
+            NPCID.DD2JavelinstT3,
+            NPCID.DD2DarkMageT1,
+            NPCID.DD2DarkMageT3,
+            NPCID.DD2SkeletonT1,
+            NPCID.DD2SkeletonT3,
+            NPCID.DD2WitherBeastT2,
+            NPCID.DD2WitherBeastT3,
+            NPCID.DD2DrakinT2,
+            NPCID.DD2DrakinT3,
+            NPCID.DD2KoboldWalkerT2,
+            NPCID.DD2KoboldWalkerT3,
+            NPCID.DD2KoboldFlyerT2,
+            NPCID.DD2KoboldFlyerT3,
+            NPCID.DD2OgreT2,
+            NPCID.DD2OgreT3,
+            NPCID.DD2LightningBugT3,
+
+            //main
+            NPCID.SkeletonMerchant,
+
+            NPCID.KingSlime,
+            NPCID.SlimeSpiked,
+
+            NPCID.EyeofCthulhu,
+            NPCID.ServantofCthulhu,
+
+            NPCID.EaterofWorldsHead,
+            NPCID.EaterofWorldsBody,
+            NPCID.EaterofWorldsTail,
+
+            NPCID.BrainofCthulhu,
+            NPCID.Creeper,
+
+            NPCID.Deerclops,
+
+            NPCID.QueenBee,
+            NPCID.Bee,
+            NPCID.BeeSmall,
+
+
+            NPCID.SkeletronHead,
+            NPCID.SkeletronHand,
+            NPCID.DarkCaster,
+            NPCID.WaterSphere,
+
+            NPCID.DungeonGuardian,
+
             NPCID.WallofFlesh,
             NPCID.WallofFleshEye,
             NPCID.LeechTail,
@@ -926,16 +1195,68 @@ namespace RegionsKLP
             NPCID.LeechHead,
             NPCID.TheHungry,
             NPCID.TheHungryII,
-            NPCID.SkeletonMerchant,
-            NPCID.ServantofCthulhu,
-            NPCID.Creeper,
+
+            NPCID.Retinazer,
+            NPCID.Spazmatism,
+
+            NPCID.TheDestroyer,
+            NPCID.TheDestroyerBody,
+            NPCID.TheDestroyerTail,
             NPCID.Probe,
-            NPCID.MoonLordFreeEye,
-            NPCID.MoonLordLeechBlob,
+
+            NPCID.SkeletronPrime,
+            NPCID.PrimeCannon,
+            NPCID.PrimeLaser,
+            NPCID.PrimeSaw,
+            NPCID.PrimeVice,
+
+
+            NPCID.QueenSlimeBoss,
+            NPCID.QueenSlimeMinionBlue,
+            NPCID.QueenSlimeMinionPink,
+            NPCID.QueenSlimeMinionPurple,
+
+            NPCID.DukeFishron,
+            NPCID.DetonatingBubble,
+            NPCID.Sharkron,
+            NPCID.Sharkron2,
+
+            NPCID.Plantera,
+            NPCID.PlanterasHook,
+            NPCID.PlanterasTentacle,
+            NPCID.Spore,
+
+            NPCID.Golem,
+            NPCID.GolemFistLeft,
+            NPCID.GolemFistRight,
+            NPCID.GolemHead,
+            NPCID.GolemHeadFree,
+
             NPCID.MartianSaucerCannon,
             NPCID.MartianSaucerTurret,
             NPCID.MartianSaucerCore,
-            NPCID.MartianSaucer
+            NPCID.MartianSaucer,
+
+            NPCID.CultistBoss,
+            NPCID.CultistBossClone,
+            NPCID.CultistDragonHead,
+            NPCID.CultistDragonBody1,
+            NPCID.CultistDragonBody2,
+            NPCID.CultistDragonBody3,
+            NPCID.CultistDragonBody4,
+            NPCID.CultistDragonTail,
+            NPCID.AncientCultistSquidhead,
+            NPCID.AncientLight,
+            NPCID.AncientDoom,
+
+            NPCID.LunarTowerSolar,
+            NPCID.SolarGoop,
+            NPCID.LunarTowerNebula,
+            NPCID.LunarTowerStardust,
+            NPCID.LunarTowerVortex,
+
+            NPCID.MoonLordFreeEye,
+            NPCID.MoonLordLeechBlob,
         };
 
         private static void OnNPCAIUpdate(NpcAiUpdateEventArgs args)
@@ -948,7 +1269,7 @@ namespace RegionsKLP
 
             if (NPC_ID_BLKLST.Contains(args.Npc.type)) return;
 
-            if (args.Npc.CountsAsACritter && args.Npc.townNPC) return;
+            if (args.Npc.CountsAsACritter || args.Npc.townNPC) return;
 
             var regions = TShock.Regions.InAreaRegionID((int)args.Npc.position.X / 16, (int)args.Npc.position.Y / 16);
 

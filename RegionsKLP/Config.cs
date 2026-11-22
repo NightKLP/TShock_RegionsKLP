@@ -132,6 +132,8 @@ namespace RegionsKLP
         public string Indicator = "*H*";
         public int? DefaultPrefix = 1;
         public bool? AllowTShockRegionOverlapping = false;
+        public bool? AllowBlackListHousingAnywhere = false;
+        public bool? AllowBlackListGroupsHousingAnywhere = true;
 
 
 
@@ -154,6 +156,8 @@ namespace RegionsKLP
             if (Indicator == null) Indicator = getdefault.Indicator;
             if (DefaultPrefix == null) DefaultPrefix = getdefault.DefaultPrefix;
             if (AllowTShockRegionOverlapping == null) AllowTShockRegionOverlapping = getdefault.AllowTShockRegionOverlapping;
+            if (AllowBlackListHousingAnywhere == null) AllowBlackListHousingAnywhere = getdefault.AllowBlackListHousingAnywhere;
+            if (AllowBlackListGroupsHousingAnywhere == null) AllowBlackListGroupsHousingAnywhere = getdefault.AllowBlackListGroupsHousingAnywhere;
 
             if (MaxHouseDefault == null) MaxHouseDefault = getdefault.MaxHouseDefault;
 
@@ -173,9 +177,12 @@ namespace RegionsKLP
         public string HouseKLP_Delete = "RegionKLP.house.default";
         public string HouseKLP_Share = "RegionKLP.house.default";
         public string HouseKLP_ShareWithGroups = "RegionKLP.house.default";
+        public string HouseKLP_BlackList = "RegionKLP.house.blacklist";
+        public string HouseKLP_BlackListWithGroups = "RegionKLP.house.blacklist.group";
         public string HouseKLP_TeleportOwnedClaim = "RegionKLP.house.teleport";
 
         public string HouseKLP_SlotsNoLimits = "RegionKLP.house.nolimitslot";
+        public string HouseKLP_ByPassBlackList = "RegionKLP.house.bypassblacklist";
         public string HouseKLP_Admin = "RegionKLP.house.admin";
         public string Cfg_Permission = "RegionKLP.house.admin";
 
@@ -189,9 +196,12 @@ namespace RegionsKLP
             if (HouseKLP_Delete == null) HouseKLP_Delete = getdefault.HouseKLP_Delete;
             if (HouseKLP_Share == null) HouseKLP_Share = getdefault.HouseKLP_Share;
             if (HouseKLP_ShareWithGroups == null) HouseKLP_ShareWithGroups = getdefault.HouseKLP_ShareWithGroups;
+            if (HouseKLP_BlackList == null) HouseKLP_BlackList = getdefault.HouseKLP_BlackList;
+            if (HouseKLP_BlackListWithGroups == null) HouseKLP_BlackListWithGroups = getdefault.HouseKLP_BlackListWithGroups;
             if (HouseKLP_TeleportOwnedClaim == null) HouseKLP_TeleportOwnedClaim = getdefault.HouseKLP_TeleportOwnedClaim;
 
             if (HouseKLP_SlotsNoLimits == null) HouseKLP_SlotsNoLimits = getdefault.HouseKLP_SlotsNoLimits;
+            if (HouseKLP_ByPassBlackList == null) HouseKLP_ByPassBlackList = getdefault.HouseKLP_ByPassBlackList;
             if (HouseKLP_Admin == null) HouseKLP_Admin = getdefault.HouseKLP_Admin;
             if (Cfg_Permission == null) Cfg_Permission = getdefault.Cfg_Permission;
         }

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Terraria.DataStructures;
+using Terraria;
 using TShockAPI;
 using TShockAPI.DB;
 using static RegionsKLP.Modules.HouseKLP;
@@ -63,7 +64,7 @@ namespace RegionsKLP
                     args.Player.SendErrorMessage("Invalid Sub-Command");
                     args.Player.SendMessage(
                         "\nHouse sub-commands" +
-                        "\n" + string.Join(",", subcmdnames), Color.Yellow);
+                        "\n" + string.Join(", ", subcmdnames), Color.Yellow);
                 }
                 return;
             }
@@ -115,7 +116,7 @@ namespace RegionsKLP
                     args.Player.SendErrorMessage("Invalid Sub-Command");
                     args.Player.SendMessage(
                         "\nHouse Admin sub-commands" +
-                        "\n" + string.Join(",", subcmdnames), Color.Yellow);
+                        "\n" + string.Join(", ", subcmdnames), Color.Yellow);
                 }
                 return;
             }
@@ -161,8 +162,14 @@ namespace RegionsKLP
             ("share", EmptySubAlias, HouseShareSubCommand, MainKLP.Config.Permissions.HouseKLP_Share),
             ("unshare", EmptySubAlias, HouseUnshareSubCommand, MainKLP.Config.Permissions.HouseKLP_Share),
 
+            ("blacklist", new string[]{ "blklst" }, HouseBlackListSubCommand, MainKLP.Config.Permissions.HouseKLP_BlackList),
+            ("removeblacklist", new string[]{ "removeblklst" }, HouseRemoveBlackListSubCommand, MainKLP.Config.Permissions.HouseKLP_BlackList),
+
             ("sharegroup", EmptySubAlias, HouseShareGroupSubCommand, MainKLP.Config.Permissions.HouseKLP_ShareWithGroups),
             ("unsharegroup", EmptySubAlias, HouseUnshareGroupSubCommand, MainKLP.Config.Permissions.HouseKLP_ShareWithGroups),
+
+            ("blacklistgroup", new string[]{ "blklstgroup" }, HouseBlackListGroupSubCommand, MainKLP.Config.Permissions.HouseKLP_BlackListWithGroups),
+            ("removeblacklistgroup", new string[]{ "removeblklstgroup" }, HouseRemoveBlackListGroupSubCommand, MainKLP.Config.Permissions.HouseKLP_BlackListWithGroups),
         };
 
         #region [ Sub-Command : overview ]
@@ -898,6 +905,254 @@ namespace RegionsKLP
             args.Player.SendSuccessMessage($"Users of group \"{tsGroup.Name}\" have no more build access to this house anymore.");
         }
         #endregion
+
+        #region [ Sub-Command : blacklist ]
+        private static void HouseBlackListSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 2)
+            {
+                args.Player.SendErrorMessage("Proper syntax: /house blacklist <username>");
+                //args.Player.SendInfoMessage("Type /house blacklist help to get more information about this command.");
+                return;
+            }
+
+            string shareTargetRaw = string.Join(" ", args.Parameters.ToArray(), 1, args.Parameters.Count - 1);
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(shareTargetRaw);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(shareTargetRaw);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            Region region;
+            RegionKLP regionklp;
+            if (!HouseKLP.TryGetAccessibleHouseRegionAtPlayer(args.Player, out _, out regionklp, out region)) { return; }
+
+            if ((args.Player.TileY <= Main.worldSurface || args.Player.TileY >= Main.UnderworldLayer || (region.Area.Y + region.Area.Height) >= Main.UnderworldLayer)
+                && !(bool)MainKLP.Config.Main.Housing.AllowBlackListHousingAnywhere)
+            {
+                args.Player.SendErrorMessage("You can only blacklist users on cavern layer!");
+                return;
+            }
+
+            if (regionklp.BlackListUsers.Contains(tsUser.ID))
+            {
+                args.Player.SendErrorMessage($"User \"{tsUser.Name}\" is already blacklisted from this house.");
+                return;
+            }
+
+            if (!regionklp.AddBlackListUser(tsUser.ID))
+            {
+                args.Player.SendErrorMessage("Internal error has occured.");
+                return;
+            }
+
+            args.Player.SendSuccessMessage($"User \"{tsUser.Name}\" is blacklisted from this house now.");
+        }
+        #endregion
+
+        #region [ Sub-Command : removeblacklist ]
+        private static void HouseRemoveBlackListSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 2)
+            {
+                args.Player.SendErrorMessage("Proper syntax: /house removeblacklist <user name>");
+                args.Player.SendInfoMessage("Type /house removeblacklist help to get more information about this command.");
+                return;
+            }
+
+            string shareTargetRaw = string.Join(" ", args.Parameters.ToArray(), 1, args.Parameters.Count - 1);
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(shareTargetRaw);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(shareTargetRaw);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            Region region;
+            RegionKLP regionklp;
+            if (!HouseKLP.TryGetAccessibleHouseRegionAtPlayer(args.Player, out _, out regionklp, out region)) { return; }
+
+            if (!regionklp.BlackListUsers.Contains(tsUser.ID))
+            {
+                args.Player.SendErrorMessage($"User \"{tsUser.Name}\" is not blacklisted from this house.");
+                return;
+            }
+
+            if (!regionklp.RemoveBlackListUser(tsUser.ID))
+            {
+                args.Player.SendErrorMessage("Internal error has occured.");
+                return;
+            }
+
+            args.Player.SendSuccessMessage($"User \"{tsUser.Name}\" is no longer blacklisted from this house.");
+        }
+
+        #endregion
+
+        #region [ Sub-Command : blacklistgroup ]
+        public static void HouseBlackListGroupSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 2)
+            {
+                args.Player.SendErrorMessage("Proper syntax: /house blacklistgroup <group name>");
+                args.Player.SendInfoMessage("Type /house blacklistgroup help to get more information about this command.");
+                return;
+            }
+
+            string shareTargetRaw = string.Join(" ", args.Parameters.ToArray(), 1, args.Parameters.Count - 1);
+            
+            Group tsGroup = TShock.Groups.GetGroupByName(shareTargetRaw);
+            if (tsGroup == null)
+            {
+                args.Player.SendErrorMessage($"A group with the name \"{shareTargetRaw}\" does not exist.");
+                return;
+            }
+
+            Region region;
+            RegionKLP regionklp;
+            if (!HouseKLP.TryGetAccessibleHouseRegionAtPlayer(args.Player, out _, out regionklp, out region)) { return; }
+
+            if ((args.Player.TileY <= Main.worldSurface || args.Player.TileY >= Main.UnderworldLayer || (region.Area.Y + region.Area.Height) >= Main.UnderworldLayer)
+                && !(bool)MainKLP.Config.Main.Housing.AllowBlackListGroupsHousingAnywhere)
+            {
+                args.Player.SendErrorMessage("You can only blacklist groups on cavern layer!");
+                return;
+            }
+
+            if (regionklp.BlackListGroups.Contains(tsGroup.Name))
+            {
+                args.Player.SendErrorMessage($"Group \"{tsGroup.Name}\" is already blacklisted from this house.");
+                return;
+            }
+
+            if (!regionklp.AddBlackListGroup(tsGroup.Name))
+            {
+                args.Player.SendErrorMessage("Internal error has occured.");
+                return;
+            }
+
+            args.Player.SendSuccessMessage($"Group \"{tsGroup.Name}\" is blacklisted from this house now.");
+        }
+        #endregion
+
+        #region [ Sub-Command : removeblacklistgroup ]
+        public static void HouseRemoveBlackListGroupSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 2)
+            {
+                args.Player.SendErrorMessage("Proper syntax: /house removeblacklistgroup <group name>");
+                args.Player.SendInfoMessage("Type /house removeblacklistgroup help to get more information about this command.");
+                return;
+            }
+
+            string shareTargetRaw = string.Join(" ", args.Parameters.ToArray(), 1, args.Parameters.Count - 1);
+            
+            Group tsGroup = TShock.Groups.GetGroupByName(shareTargetRaw);
+            if (tsGroup == null)
+            {
+                args.Player.SendErrorMessage("A group with the name \"{0}\" does not exist.", shareTargetRaw);
+                return;
+            }
+
+            Region region;
+            RegionKLP regionklp;
+            if (!HouseKLP.TryGetAccessibleHouseRegionAtPlayer(args.Player, out _, out regionklp, out region)) { return; }
+
+
+            if (!regionklp.BlackListGroups.Contains(tsGroup.Name))
+            {
+                args.Player.SendErrorMessage($"Group \"{tsGroup.Name}\" is not blacklisted from this house.");
+                return;
+            }
+
+            if (!regionklp.RemoveBlackListGroup(tsGroup.Name))
+            {
+                args.Player.SendErrorMessage("Internal error has occured.");
+                return;
+            }
+
+            args.Player.SendSuccessMessage($"Group \"{tsGroup.Name}\" is no longer blacklisted from this house.");
+        }
+        #endregion
     }
 
     public static class HouseAdminCommandKLP
@@ -907,8 +1162,14 @@ namespace RegionsKLP
         public static List<(string name, string[] alias, Action<CommandArgs> action, string permission)> SubCommands = new List<(string, string[], Action<CommandArgs> action, string permission)>()
         {
             ("playerdatalist", new string[]{ "plrdatalist" }, HousePlayerDataListSubCommand, ""),
-            ("givehouseslot", new string[]{ "giveslot" }, HouseGiveHouseSlotSubCommand, ""),
-            ("removehouseslot", new string[]{ "removeslot" }, HouseRemoveHouseSlotSubCommand, "")
+            ("givemaxhouseslot", new string[]{ "givehouseslot", "giveslot" }, HouseGiveHouseSlotSubCommand, ""),
+            ("removemaxhouseslot", new string[]{ "removehouseslot", "removeslot" }, HouseRemoveHouseSlotSubCommand, ""),
+            ("givemaxtilewidth", new string[]{ "givetilewidth" }, HouseGiveMaxTileWidthSubCommand, ""),
+            ("removemaxtilewidth", new string[]{ "removetilewidth" }, HouseRemoveMaxTileWidthSubCommand, ""),
+            ("givemaxtileheight", new string[]{ "givetileheight" }, HouseGiveMaxTileHeightSubCommand, ""),
+            ("removemaxtileheight", new string[]{ "removetileheight" }, HouseRemoveMaxTileHeightSubCommand, ""),
+            ("givemaxtotaltile", new string[]{ "givetotaltile" }, HouseGiveMaxTotalTileSubCommand, ""),
+            ("removemaxtotaltile", new string[]{ "removetotaltile" }, HouseRemoveMaxTotalTileSubCommand, "")
         };
 
         #region [ Sub-Command : playerdatalist ]
@@ -1028,7 +1289,7 @@ namespace RegionsKLP
             }
 
 
-            if (accdata.AddSlot(amount))
+            if (accdata.AddMaxHouseSlot(amount))
             {
                 args.Player.SendSuccessMessage($"Successfully add {amount} maxhouseslot to {target.Name}.");
                 if (target != null) { target.SendMessage($"you were given {amount} maxhouseslot from {args.Player.Name}", Color.LightSteelBlue); }
@@ -1116,13 +1377,541 @@ namespace RegionsKLP
             }
 
 
-            if (accdata.RemoveSlot(amount))
+            if (accdata.RemoveMaxHouseSlot(amount))
             {
                 args.Player.SendSuccessMessage($"Successfully remove {amount} maxhouseslot to {target.Name}.");
                 if (target != null) { target.SendMessage($"your {amount} maxhouseslot was taken away from {args.Player.Name}", Color.LightSteelBlue); }
             } else
             {
                 args.Player.SendErrorMessage($"Unable to remove {amount} maxhouseslot to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : givetilewidth ]
+        public static void HouseGiveMaxTileWidthSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin givetilewidth [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.AddMaxTileWidth(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully add {amount} maxtilewidth to {target.Name}.");
+                if (target != null) { target.SendMessage($"you were given {amount} maxtilewidth from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to give {amount} maxtilewidth to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : removemaxtilewidth ]
+        public static void HouseRemoveMaxTileWidthSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin removemaxtilewidth [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.RemoveMaxTileWidth(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully remove {amount} maxtilewidth to {target.Name}.");
+                if (target != null) { target.SendMessage($"your {amount} maxtilewidth was taken away from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to remove {amount} maxtilewidth to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : givetileheight ]
+        public static void HouseGiveMaxTileHeightSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin givetileheight [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.AddMaxTileHeight(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully add {amount} givetileheight to {target.Name}.");
+                if (target != null) { target.SendMessage($"you were given {amount} givetileheight from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to give {amount} givetileheight to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : removemaxtileheight ]
+        public static void HouseRemoveMaxTileHeightSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin removemaxtileheight [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.RemoveMaxTileHeight(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully remove {amount} removemaxtileheight to {target.Name}.");
+                if (target != null) { target.SendMessage($"your {amount} removemaxtileheight was taken away from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to remove {amount} removemaxtileheight to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : givemaxtotaltile ]
+        public static void HouseGiveMaxTotalTileSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin givemaxtotaltile [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.AddMaxTotalTile(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully add {amount} maxtotaltile to {target.Name}.");
+                if (target != null) { target.SendMessage($"you were given {amount} maxtotaltile from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to give {amount} maxtotaltile to {target.Name}");
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region [ Sub-Command : removemaxtotaltile ]
+        public static void HouseRemoveMaxTotalTileSubCommand(CommandArgs args)
+        {
+            if (args.Parameters.Count < 3)
+            {
+                args.Player.SendErrorMessage("Proper Syntax: /houseadmin removemaxtotaltile [account] [amount]");
+                return;
+            }
+
+            UserAccount tsUser = TShock.UserAccounts.GetUserAccountByName(args.Parameters[1]);
+            TSPlayer target = null;
+
+            if (tsUser != null)
+            {
+                // See if this account is currently online.
+                target = TShock.Players.FirstOrDefault(p =>
+                    p != null &&
+                    p.IsLoggedIn &&
+                    p.Account?.ID == tsUser.ID);
+            }
+            else
+            {
+                // Fall back to searching online players.
+                var players = TSPlayer.FindByNameOrID(args.Parameters[1]);
+
+                if (players.Count > 1)
+                {
+                    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
+                    return;
+                }
+
+                if (players.Count == 0)
+                {
+                    args.Player.SendErrorMessage("Invalid player.");
+                    return;
+                }
+
+                target = players[0];
+
+                if (!target.IsLoggedIn)
+                {
+                    args.Player.SendErrorMessage("That player is not logged in.");
+                    return;
+                }
+
+                tsUser = target.Account;
+            }
+
+            if (tsUser == null)
+            {
+                args.Player.SendErrorMessage("Invalid player.");
+                return;
+            }
+
+            PlayerHousingKLP accdata;
+            if (!MainKLP.MainDBManager.TryGetPlayerHouseDataByAccountID(tsUser.ID, out accdata))
+            {
+                args.Player.SendErrorMessage("Unable to get User Data!");
+                return;
+            }
+
+            int amount;
+            if (!int.TryParse(args.Parameters[2], out amount))
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+            if (amount <= 0)
+            {
+                args.Player.SendErrorMessage("Invalid Amount!");
+                return;
+            }
+
+
+            if (accdata.RemoveMaxTotalTile(amount))
+            {
+                args.Player.SendSuccessMessage($"Successfully remove {amount} removemaxtotaltile to {target.Name}.");
+                if (target != null) { target.SendMessage($"your {amount} removemaxtotaltile was taken away from {args.Player.Name}", Color.LightSteelBlue); }
+            } else
+            {
+                args.Player.SendErrorMessage($"Unable to remove {amount} removemaxtotaltile to {target.Name}");
             }
 
             return;

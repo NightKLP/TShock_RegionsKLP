@@ -37,6 +37,8 @@ namespace RegionsKLP
             sqlCreator.EnsureTableStructure(new SqlTable(RegionKLP.TableName,
                 new SqlColumn("RegionID", MySqlDbType.Int32) { Unique = true },
                 new SqlColumn("SubName", MySqlDbType.VarChar, 40),
+                new SqlColumn("BlackListUsers", MySqlDbType.Text),
+                new SqlColumn("BlackListGroups", MySqlDbType.Text),
                 new SqlColumn("RegionType", MySqlDbType.VarChar, 38)));
 
         }
@@ -185,6 +187,8 @@ namespace RegionsKLP
                 result.Add(new RegionKLP(
                     reader.Get<int>("RegionID"),
                     reader.Get<string>("SubName") ?? "",
+                    reader.Get<string>("BlackListUsers"),
+                    reader.Get<string>("BlackListGroups"),
                     reader.Get<string>("RegionType")
                     ));
             }
@@ -431,22 +435,76 @@ namespace RegionsKLP
             }
 
         }
-
-        public bool SetSlot(int slot)
+        #region [ Max House Slot ]
+        public bool SetMaxHouseSlot(int slot)
         {
             MaxHouseSlot = slot;
             return _db.Query($"UPDATE {TableName} SET MaxHouseSlot = @0 WHERE ID = @1", MaxHouseSlot, ID) != 0;
         }
-        public bool AddSlot(int slot)
+        public bool AddMaxHouseSlot(int slot)
         {
             MaxHouseSlot += slot;
             return _db.Query($"UPDATE {TableName} SET MaxHouseSlot = @0 WHERE ID = @1", MaxHouseSlot, ID) != 0;
         }
-        public bool RemoveSlot(int slot)
+        public bool RemoveMaxHouseSlot(int slot)
         {
             MaxHouseSlot -= slot;
             return _db.Query($"UPDATE {TableName} SET MaxHouseSlot = @0 WHERE ID = @1", MaxHouseSlot, ID) != 0;
         }
+        #endregion
+
+        #region [ Max Tile Width ]
+        public bool SetMaxTileWidth(int amount)
+        {
+            MaxTileWidth = amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileWidth = @0 WHERE ID = @1", MaxTileWidth, ID) != 0;
+        }
+        public bool AddMaxTileWidth(int amount)
+        {
+            MaxTileWidth += amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileWidth = @0 WHERE ID = @1", MaxTileWidth, ID) != 0;
+        }
+        public bool RemoveMaxTileWidth(int amount)
+        {
+            MaxTileWidth -= amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileWidth = @0 WHERE ID = @1", MaxTileWidth, ID) != 0;
+        }
+        #endregion
+        #region [ Max Tile Height ]
+        public bool SetMaxTileHeight(int amount)
+        {
+            MaxTileHeight = amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileHeight = @0 WHERE ID = @1", MaxTileHeight, ID) != 0;
+        }
+        public bool AddMaxTileHeight(int amount)
+        {
+            MaxTileHeight += amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileHeight = @0 WHERE ID = @1", MaxTileHeight, ID) != 0;
+        }
+        public bool RemoveMaxTileHeight(int amount)
+        {
+            MaxTileHeight -= amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTileHeight = @0 WHERE ID = @1", MaxTileHeight, ID) != 0;
+        }
+        #endregion
+
+        #region [ Max Total Tile ]
+        public bool SetMaxTotalTile(int amount)
+        {
+            MaxTotalTile = amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTotalTile = @0 WHERE ID = @1", MaxTotalTile, ID) != 0;
+        }
+        public bool AddMaxTotalTile(int amount)
+        {
+            MaxTotalTile += amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTotalTile = @0 WHERE ID = @1", MaxTotalTile, ID) != 0;
+        }
+        public bool RemoveMaxTotalTile(int amount)
+        {
+            MaxTotalTile -= amount;
+            return _db.Query($"UPDATE {TableName} SET MaxTotalTile = @0 WHERE ID = @1", MaxTotalTile, ID) != 0;
+        }
+        #endregion
         protected static IDbConnection Getsqlcon()
         {
             return MainKLP.MainIDBC;
@@ -462,6 +520,8 @@ namespace RegionsKLP
 
         public int ID;
         public string SubName;
+        public int[] BlackListUsers;
+        public string[] BlackListGroups;
         public string[] RegionType;
 
         private IDbConnection _db = MainKLP.MainIDBC;
@@ -488,7 +548,7 @@ namespace RegionsKLP
 
             if (isadded)
             {
-                stats = new(ID, Name, RegionType);
+                stats = new(ID, Name, "", "", RegionType);
             }
             else
             {
@@ -519,11 +579,42 @@ namespace RegionsKLP
 
         public RegionKLP() { }
 
-        public RegionKLP(int ID, string SubName, string RegionType)
+        public RegionKLP(int ID, string SubName, string BlackListUsers, string BlackListGroups, string RegionType)
         {
 
             this.ID = ID;
             this.SubName = SubName;
+
+            if (string.IsNullOrEmpty(BlackListUsers))
+            {
+                this.BlackListUsers = new int[] { };
+            }
+            else if (BlackListUsers.Contains(","))
+            {
+                List<int> result = new();
+                foreach (string get in BlackListUsers.Split(","))
+                {
+                    result.Add(int.Parse(get));
+                }
+                this.BlackListUsers = result.ToArray();
+            }
+            else
+            {
+                this.BlackListUsers = new int[] { int.Parse(BlackListUsers) };
+            }
+
+            if (string.IsNullOrEmpty(BlackListGroups))
+            {
+                this.BlackListGroups = new string[] { };
+            }
+            else if (BlackListGroups.Contains(","))
+            {
+                this.BlackListGroups = BlackListGroups.Split(",");
+            }
+            else
+            {
+                this.BlackListGroups = new string[] { BlackListGroups };
+            }
 
             if (string.IsNullOrEmpty(RegionType))
             {
@@ -626,7 +717,77 @@ namespace RegionsKLP
         }
         #endregion
 
+        #region [ BlackList ] 
 
+        public bool IsBlackListed(TSPlayer player)
+        {
+            if (player.Account == null) { return false; }
+            if (BlackListUsers.Contains(player.Account.ID)) { return true; }
+            if (BlackListGroups.Contains(player.Account.Group)) { return true; }
+            return false;
+        }
+
+        public bool AddBlackListUser(int userid)
+        {
+            #region code
+
+            List<int> result = BlackListUsers.ToList();
+
+            if (result.Contains(userid)) { return true; }
+
+            result.Add(userid);
+
+            BlackListUsers = result.ToArray();
+            return _db.Query($"UPDATE {TableName} SET BlackListUsers = @0 WHERE RegionID = @1", string.Join(",", BlackListUsers), ID) != 0;
+            #endregion
+        }
+
+        public bool RemoveBlackListUser(int userid)
+        {
+            #region code
+
+            List<int> result = BlackListUsers.ToList();
+
+            if (!result.Contains(userid)) { return true; }
+
+            result.Remove(userid);
+
+            BlackListUsers = result.ToArray();
+            return _db.Query($"UPDATE {TableName} SET BlackListUsers = @0 WHERE RegionID = @1", string.Join(",", BlackListUsers), ID) != 0;
+            #endregion
+        }
+
+        public bool AddBlackListGroup(string group)
+        {
+            #region code
+
+            List<string> result = BlackListGroups.ToList();
+
+            if (result.Contains(group)) { return true; }
+
+            result.Add(group);
+
+            BlackListGroups = result.ToArray();
+            return _db.Query($"UPDATE {TableName} SET BlackListGroups = @0 WHERE RegionID = @1", string.Join(",", BlackListGroups), ID) != 0;
+            #endregion
+        }
+
+        public bool RemoveBlackListGroup(string group)
+        {
+            #region code
+
+            List<string> result = BlackListGroups.ToList();
+
+            if (!result.Contains(group)) { return true; }
+
+            result.Remove(group);
+
+            BlackListGroups = result.ToArray();
+            return _db.Query($"UPDATE {TableName} SET BlackListGroups = @0 WHERE RegionID = @1", string.Join(",", BlackListGroups), ID) != 0;
+            #endregion
+        }
+
+        #endregion
 
         public static bool Delete(int AccountID)
         {
