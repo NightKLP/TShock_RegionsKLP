@@ -438,11 +438,13 @@ namespace RegionsKLP
                     }
                     await PlayAni(SpreadFromBorder(get.Area, tilepos));
 
-
-                    args.Player.SendData(PacketTypes.CreateCombatTextExtended,
-                        $"Entered a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}" +
-                        (get.HasPermissionToBuildInRegion(args.Player) ? " [ Access Granted! ]" : "")
-                        , (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y + 30);
+                    if ((bool)Config.Main.Housing.RegionEnterIndication)
+                    {
+                        args.Player.SendData(PacketTypes.CreateCombatTextExtended,
+                            $"Entered a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}" +
+                            (get.HasPermissionToBuildInRegion(args.Player) ? " [ Access Granted! ]" : "")
+                            , (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y + 30);
+                    }
                 }
             }
 
@@ -456,11 +458,14 @@ namespace RegionsKLP
 
                     await PlayAni(SpreadFromBorder(get.Area, tilepos));
 
-                    string msg = $"You left a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}";
+                    if ((bool)Config.Main.Housing.RegionEnterIndication)
+                    {
+                        string msg = $"You left a {(get.Name.StartsWith(Config.Main.Housing.Indicator) ? $"house{(args.Player.Name == get.Owner ? "" : $" owned by {get.Owner}")}" : $"region named: {get.Name}")}";
 
 
-                    args.Player.SendData(PacketTypes.CreateCombatTextExtended,
-                        msg, (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y);
+                        args.Player.SendData(PacketTypes.CreateCombatTextExtended,
+                            msg, (int)Color.Aquamarine.packedValue, args.Player.X, args.Player.Y);
+                    }
                 }
             }
 

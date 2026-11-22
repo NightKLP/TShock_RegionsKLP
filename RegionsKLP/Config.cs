@@ -132,6 +132,7 @@ namespace RegionsKLP
         public string Indicator = "*H*";
         public int? DefaultPrefix = 1;
         public bool? AllowTShockRegionOverlapping = false;
+        public bool? RegionEnterIndication = false;
         public bool? AllowBlackListHousingAnywhere = false;
         public bool? AllowBlackListGroupsHousingAnywhere = true;
 
@@ -156,6 +157,7 @@ namespace RegionsKLP
             if (Indicator == null) Indicator = getdefault.Indicator;
             if (DefaultPrefix == null) DefaultPrefix = getdefault.DefaultPrefix;
             if (AllowTShockRegionOverlapping == null) AllowTShockRegionOverlapping = getdefault.AllowTShockRegionOverlapping;
+            if (RegionEnterIndication == null) RegionEnterIndication = getdefault.RegionEnterIndication;
             if (AllowBlackListHousingAnywhere == null) AllowBlackListHousingAnywhere = getdefault.AllowBlackListHousingAnywhere;
             if (AllowBlackListGroupsHousingAnywhere == null) AllowBlackListGroupsHousingAnywhere = getdefault.AllowBlackListGroupsHousingAnywhere;
 
